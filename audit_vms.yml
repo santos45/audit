@@ -1,4 +1,3 @@
-# audit_vms.yml
 - name: Audit Azure VMs
   hosts: all
   become: yes
@@ -13,14 +12,14 @@
       command: df -h
       register: disk_usage
 
-    - name: Print disk usage
+    - name: Show disk usage
       debug:
         var: disk_usage.stdout_lines
 
     - name: List system users
-      command: cut -d: -f1 /etc/passwd
-      register: users
+      command: "cut -d: -f1 /etc/passwd"
+      register: user_list
 
-    - name: Print users
+    - name: Show system users
       debug:
-        var: users.stdout_lines
+        var: user_list.stdout_lines
