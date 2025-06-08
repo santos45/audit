@@ -1,0 +1,21 @@
+- name: System audit: hostname, uptime, and kernel
+  hosts: all
+  become: yes
+  gather_facts: yes
+
+  tasks:
+    - name: Display hostname
+      debug:
+        msg: "{{ ansible_hostname }}"
+
+    - name: Display system uptime
+      command: uptime
+      register: uptime_out
+
+    - name: Show uptime output
+      debug:
+        var: uptime_out.stdout
+
+    - name: Show kernel version
+      debug:
+        msg: "{{ ansible_kernel }}"
