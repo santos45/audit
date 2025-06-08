@@ -1,0 +1,26 @@
+# audit_vms.yml
+- name: Audit Azure VMs
+  hosts: all
+  become: yes
+  gather_facts: yes
+
+  tasks:
+    - name: Check OS version
+      debug:
+        msg: "{{ ansible_distribution }} {{ ansible_distribution_version }}"
+
+    - name: Check disk usage
+      command: df -h
+      register: disk_usage
+
+    - name: Print disk usage
+      debug:
+        var: disk_usage.stdout_lines
+
+    - name: List system users
+      command: cut -d: -f1 /etc/passwd
+      register: users
+
+    - name: Print users
+      debug:
+        var: users.stdout_lines
