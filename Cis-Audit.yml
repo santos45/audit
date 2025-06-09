@@ -1,5 +1,5 @@
 ---
-- name: "CIS Linux Server Benchmark Audit (50 Checks)"
+- name: "CIS Linux Server Benchmark Audit (20 Checks)"
   hosts: all
   become: yes
   gather_facts: yes
@@ -16,26 +16,24 @@
         mode: '0755'
 
   tasks:
-    - name: "Generate 50 placeholder CIS checks"
+    - name: "Generate 20 placeholder CIS checks"
       set_fact:
-        cis_results: >-
-          {{ cis_results + [
-            'CIS-' ~ item|string ~ ': ' ~ (
-              'PASS ✅ Check passed'
-              if item % 3 != 0 else 'FAIL ❌ Check failed'
-            )
-            for item in range(1, 51)
-          ] }}
+        cis_results: []
+
+    - name: "Append simulated results"
+      set_fact:
+        cis_results: "{{ cis_results + [ 'CIS-' ~ item|string ~ ': ' ~ ('PASS ✅ Check passed' if item % 3 != 0 else 'FAIL ❌ Check failed') ] }}"
+      loop: "{{ range(1, 21) | list }}"
 
     - name: "Count total PASS and FAIL"
       set_fact:
         cis_pass_count: "{{ cis_results | select('search', 'PASS') | list | length }}"
         cis_fail_count: "{{ cis_results | select('search', 'FAIL') | list | length }}"
-        cis_total: 50
+        cis_total: 20
         cis_score: "{{ (cis_pass_count / cis_total * 100) | round(2) }}"
 
   post_tasks:
-    - name: "CIS Benchmark Compliance Report (50 Checks)"
+    - name: "CIS Benchmark Compliance Report (20 Checks)"
       debug:
         msg:
           - "\n=== CIS Audit Results ==="
@@ -44,4 +42,4 @@
           - "Score: {{ cis_score }}%"
           - "========================="
           - "Results Summary:"
-          - "{{ cis_results }}"
+          - "{{ cis_results }}
