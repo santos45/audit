@@ -1,11 +1,12 @@
 ---
-- name: "DORA Compliance Audit"
+- name: "DORA Compliance Audit with PASS/FAIL"
   hosts: all
   become: yes
   gather_facts: yes
 
   vars:
     dora_output_dir: /var/tmp/dora_audit_reports
+    dora_results: []
 
   pre_tasks:
     - name: "Ensure audit report directory exists"
@@ -20,106 +21,119 @@
       shell: uptime
       register: uptime_out
 
-    - name: "Save uptime to report"
-      copy:
-        content: "{{ uptime_out.stdout }}"
-        dest: "{{ dora_output_dir }}/uptime.txt"
+    - name: "Log [DORA-1] result"
+      set_fact:
+        dora_results: "{{ dora_results + [ 'DORA-1: PASS ✅ Uptime collected' ] }}"
 
-    - name: "[DORA-2] Check OS version"
+    - name: "[DORA-2] OS version"
       shell: cat /etc/os-release
       register: os_release
 
-    - name: "Save OS version to report"
-      copy:
-        content: "{{ os_release.stdout }}"
-        dest: "{{ dora_output_dir }}/os_version.txt"
+    - name: "Log [DORA-2] result"
+      set_fact:
+        dora_results: "{{ dora_results + [ 'DORA-2: PASS ✅ OS version collected' ] }}"
 
-    - name: "[DORA-3] Check Kernel version"
+    - name: "[DORA-3] Kernel version"
       shell: uname -r
       register: kernel_version
 
-    - name: "Save kernel version to report"
-      copy:
-        content: "{{ kernel_version.stdout }}"
-        dest: "{{ dora_output_dir }}/kernel_version.txt"
+    - name: "Log [DORA-3] result"
+      set_fact:
+        dora_results: "{{ dora_results + [ 'DORA-3: PASS ✅ Kernel version: ' ~ kernel_version.stdout ] }}"
 
-    - name: "[DORA-4] Check for running firewall (ufw)"
-      command: ufw status
+    - name: "[DORA-4] Firewall status (ufw)"
+      shell: ufw status
       register: ufw_status
       failed_when: false
       changed_when: false
 
-    - name: "Save firewall status"
-      copy:
-        content: "{{ ufw_status.stdout }}"
-        dest: "{{ dora_output_dir }}/firewall_status.txt"
+    - name: "Log [DORA-4] result"
+      set_fact:
+        dora_results: "{{ dora_results + [
+          'DORA-4: ' ~ (
+            'PASS ✅ Firewall is active'
+            if 'Status: active' in ufw_status.stdout
+            else 'FAIL ❌ Firewall is not active'
+          )
+        ] }}"
 
-    - name: "[DORA-5] Check SSH configuration"
-      slurp:
-        src: /etc/ssh/sshd_config
+    - name: "[DORA-5] SSH Configuration"
+      shell: grep -E '^PermitRootLogin|^PasswordAuthentication' /etc/ssh/sshd_config || true
       register: ssh_config
+      failed_when: false
 
-    - name: "Save SSH config"
-      copy:
-        content: "{{ ssh_config.content | b64decode }}"
-        dest: "{{ dora_output_dir }}/sshd_config.txt"
+    - name: "Log [DORA-5] result"
+      set_fact:
+        dora_results: "{{ dora_results + [
+          'DORA-5: ' ~ (
+            'PASS ✅ Secure SSH config'
+            if ('PermitRootLogin no' in ssh_config.stdout and 'PasswordAuthentication no' in ssh_config.stdout)
+            else 'FAIL ❌ SSH config allows root or password login'
+          )
+        ] }}"
 
-    - name: "[DORA-6] List users with sudo access"
+    - name: "[DORA-6] Sudo access control"
       shell: getent group sudo || getent group wheel
       register: sudo_users
 
-    - name: "Save sudo users"
-      copy:
-        content: "{{ sudo_users.stdout }}"
-        dest: "{{ dora_output_dir }}/sudo_users.txt"
+    - name: "Log [DORA-6] result"
+      set_fact:
+        dora_results: "{{ dora_results + [ 'DORA-6: PASS ✅ Sudo group: ' ~ sudo_users.stdout ] }}"
 
-    - name: "[DORA-7] List listening ports"
+    - name: "[DORA-7] Listening ports"
       command: ss -tuln
       register: open_ports
 
-    - name: "Save open ports"
-      copy:
-        content: "{{ open_ports.stdout }}"
-        dest: "{{ dora_output_dir }}/listening_ports.txt"
+    - name: "Log [DORA-7] result"
+      set_fact:
+        dora_results: "{{ dora_results + [ 'DORA-7: PASS ✅ Listening ports collected' ] }}"
 
-    - name: "[DORA-8] Log auditing configuration (rsyslog)"
+    - name: "[DORA-8] Logging (rsyslog)"
       stat:
         path: /etc/rsyslog.conf
-      register: rsyslog_check
+      register: rsyslog_conf
 
-    - name: "Save rsyslog config"
-      when: rsyslog_check.stat.exists
-      slurp:
-        src: /etc/rsyslog.conf
-      register: rsyslog_config
+    - name: "Log [DORA-8] result"
+      set_fact:
+        dora_results: "{{ dora_results + [
+          'DORA-8: ' ~ (
+            'PASS ✅ rsyslog.conf present'
+            if rsyslog_conf.stat.exists
+            else 'FAIL ❌ Logging not configured'
+          )
+        ] }}"
 
-    - name: "Write rsyslog config to file"
-      when: rsyslog_check.stat.exists
-      copy:
-        content: "{{ rsyslog_config.content | b64decode }}"
-        dest: "{{ dora_output_dir }}/rsyslog.conf"
-
-    - name: "[DORA-9] Check for auditd"
+    - name: "[DORA-9] Audit daemon"
       shell: systemctl is-active auditd
       register: auditd_status
       failed_when: false
       changed_when: false
 
-    - name: "Save auditd status"
-      copy:
-        content: "{{ auditd_status.stdout }}"
-        dest: "{{ dora_output_dir }}/auditd_status.txt"
+    - name: "Log [DORA-9] result"
+      set_fact:
+        dora_results: "{{ dora_results + [
+          'DORA-9: ' ~ (
+            'PASS ✅ auditd active'
+            if auditd_status.stdout == 'active'
+            else 'FAIL ❌ auditd is not running'
+          )
+        ] }}"
 
-    - name: "[DORA-10] Collect system time config (NTP)"
+    - name: "[DORA-10] Time synchronization"
       shell: timedatectl status
       register: time_status
 
-    - name: "Save time sync status"
-      copy:
-        content: "{{ time_status.stdout }}"
-        dest: "{{ dora_output_dir }}/time_sync_status.txt"
+    - name: "Log [DORA-10] result"
+      set_fact:
+        dora_results: "{{ dora_results + [
+          'DORA-10: ' ~ (
+            'PASS ✅ Time sync active'
+            if 'System clock synchronized: yes' in time_status.stdout
+            else 'FAIL ❌ Time sync not active'
+          )
+        ] }}"
 
   post_tasks:
-    - name: "Summary"
+    - name: "DORA Compliance Report Summary"
       debug:
-        msg: "DORA audit completed. Reports saved to {{ dora_output_dir }}"
+        var: dora_results
