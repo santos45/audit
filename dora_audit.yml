@@ -1,0 +1,125 @@
+---
+- name: DORA Compliance Audit
+  hosts: all
+  become: yes
+  gather_facts: yes
+
+  vars:
+    dora_output_dir: /var/tmp/dora_audit_reports
+
+  pre_tasks:
+    - name: Ensure audit report directory exists
+      file:
+        path: "{{ dora_output_dir }}"
+        state: directory
+        mode: '0755'
+
+  tasks:
+
+    - name: [DORA-1] Uptime and availability
+      shell: uptime
+      register: uptime_out
+
+    - name: Save uptime to report
+      copy:
+        content: "{{ uptime_out.stdout }}"
+        dest: "{{ dora_output_dir }}/uptime.txt"
+
+    - name: [DORA-2] Check OS version
+      shell: cat /etc/os-release
+      register: os_release
+
+    - name: Save OS version to report
+      copy:
+        content: "{{ os_release.stdout }}"
+        dest: "{{ dora_output_dir }}/os_version.txt"
+
+    - name: [DORA-3] Check Kernel version
+      shell: uname -r
+      register: kernel_version
+
+    - name: Save kernel version to report
+      copy:
+        content: "{{ kernel_version.stdout }}"
+        dest: "{{ dora_output_dir }}/kernel_version.txt"
+
+    - name: [DORA-4] Check for running firewall (ufw)
+      command: ufw status
+      register: ufw_status
+      failed_when: false
+      changed_when: false
+
+    - name: Save firewall status
+      copy:
+        content: "{{ ufw_status.stdout }}"
+        dest: "{{ dora_output_dir }}/firewall_status.txt"
+
+    - name: [DORA-5] Check SSH configuration
+      slurp:
+        src: /etc/ssh/sshd_config
+      register: ssh_config
+
+    - name: Save SSH config
+      copy:
+        content: "{{ ssh_config.content | b64decode }}"
+        dest: "{{ dora_output_dir }}/sshd_config.txt"
+
+    - name: [DORA-6] List users with sudo access
+      shell: getent group sudo || getent group wheel
+      register: sudo_users
+
+    - name: Save sudo users
+      copy:
+        content: "{{ sudo_users.stdout }}"
+        dest: "{{ dora_output_dir }}/sudo_users.txt"
+
+    - name: [DORA-7] List listening ports
+      command: ss -tuln
+      register: open_ports
+
+    - name: Save open ports
+      copy:
+        content: "{{ open_ports.stdout }}"
+        dest: "{{ dora_output_dir }}/listening_ports.txt"
+
+    - name: [DORA-8] Log auditing configuration (rsyslog)
+      stat:
+        path: /etc/rsyslog.conf
+      register: rsyslog_check
+
+    - name: Save rsyslog config
+      when: rsyslog_check.stat.exists
+      slurp:
+        src: /etc/rsyslog.conf
+      register: rsyslog_config
+
+    - name: Write rsyslog config to file
+      when: rsyslog_check.stat.exists
+      copy:
+        content: "{{ rsyslog_config.content | b64decode }}"
+        dest: "{{ dora_output_dir }}/rsyslog.conf"
+
+    - name: [DORA-9] Check for auditd
+      shell: systemctl is-active auditd
+      register: auditd_status
+      failed_when: false
+      changed_when: false
+
+    - name: Save auditd status
+      copy:
+        content: "{{ auditd_status.stdout }}"
+        dest: "{{ dora_output_dir }}/auditd_status.txt"
+
+    - name: [DORA-10] Collect system time config (NTP)
+      shell: timedatectl status
+      register: time_status
+
+    - name: Save time sync status
+      copy:
+        content: "{{ time_status.stdout }}"
+        dest: "{{ dora_output_dir }}/time_sync_status.txt"
+
+  post_tasks:
+    - name: Summary
+      debug:
+        msg: "DORA audit completed. Reports saved to {{ dora_output_dir }}"
