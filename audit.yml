@@ -1,0 +1,126 @@
+---
+- name: Full System Audit
+  hosts: all
+  become: yes
+  gather_facts: yes
+
+  tasks:
+
+    - name: Uptime
+      command: uptime
+      register: uptime_output
+
+    - name: Print uptime
+      debug:
+        var: uptime_output.stdout
+
+    - name: Logged-in users
+      command: who
+      register: who_output
+
+    - name: Print who
+      debug:
+        var: who_output.stdout
+
+    - name: Disk usage
+      command: df -h
+      register: disk_usage
+
+    - name: Print disk usage
+      debug:
+        var: disk_usage.stdout_lines
+
+    - name: Memory usage
+      command: free -h
+      register: mem_usage
+
+    - name: Print memory usage
+      debug:
+        var: mem_usage.stdout_lines
+
+    - name: List all users
+      shell: "cut -d: -f1 /etc/passwd"
+      register: users
+
+    - name: Print all users
+      debug:
+        var: users.stdout_lines
+
+    - name: Installed packages (Debian-based)
+      shell: dpkg -l
+      register: deb_packages
+      when: ansible_facts['os_family'] == "Debian"
+
+    - name: Installed packages (RedHat-based)
+      shell: rpm -qa
+      register: rpm_packages
+      when: ansible_facts['os_family'] == "RedHat"
+
+    - name: Running processes
+      shell: ps aux --sort=-%mem | head -n 15
+      register: processes
+
+    - name: Print top processes
+      debug:
+        var: processes.stdout_lines
+
+    - name: Open ports
+      command: ss -tuln
+      register: ports
+
+    - name: Print open ports
+      debug:
+        var: ports.stdout_lines
+
+    - name: SSH Configuration
+      slurp:
+        src: /etc/ssh/sshd_config
+      register: sshd_config
+
+    - name: Print SSH config
+      debug:
+        msg: "{{ sshd_config['content'] | b64decode }}"
+
+    - name: Check sudoers file
+      shell: cat /etc/sudoers
+      register: sudoers
+
+    - name: Print sudoers
+      debug:
+        var: sudoers.stdout_lines
+
+    - name: Kernel version
+      shell: uname -r
+      register: kernel_version
+
+    - name: Print kernel version
+      debug:
+        var: kernel_version.stdout
+
+    - name: OS release
+      command: cat /etc/os-release
+      register: os_release
+
+    - name: Print OS release
+      debug:
+        var: os_release.stdout_lines
+
+    - name: Check firewall (UFW)
+      command: ufw status
+      register: ufw_status
+      failed_when: false
+      changed_when: false
+
+    - name: Print UFW status
+      debug:
+        var: ufw_status.stdout_lines
+
+    - name: Check iptables
+      command: iptables -L -n
+      register: iptables_status
+      failed_when: false
+      changed_when: false
+
+    - name: Print iptables
+      debug:
+        var: iptables_status.stdout_lines
